@@ -1,0 +1,118 @@
+from qiskit import QuantumCircuit, Aer, execute
+import numpy as np
+import matplotlib.pyplot as plt
+import threading
+import time
+import sys
+
+def print_sudoku(board):
+    for i in range(9):
+        if i % 3 == 0:
+            print("+-------+-------+-------+")
+        for j in range(9):
+            if j % 3 == 0:
+                print("| ", end="")
+            print(board[i][j] if board[i][j] != 0 else ".", end=" ")
+        print("|")
+    print("+-------+-------+-------+")
+
+def is_valid_move(board, row, col, num):
+    for i in range(9):
+        if board[row][i] == num or board[i][col] == num:
+            return False
+    box_row, box_col = 3 * (row // 3), 3 * (col // 3)
+    for i in range(box_row, box_row + 3):
+        for j in range(box_col, box_col + 3):
+            if board[i][j] == num:
+                return False
+    return True
+
+def timer_input(timeout):
+    move = [None]
+    timer_running = [True]
+
+    def countdown():
+        for i in range(timeout, 0, -1):
+            if not timer_running[0]:
+                break
+            sys.stdout.write(f"\rTime left: {i} seconds ")
+            sys.stdout.flush()
+            time.sleep(1)
+        if timer_running[0]:
+            sys.stdout.write("\rTime's up!               \n")
+
+    def get_input():
+        move[0] = tuple(np.random.randint(0, 9, 3))  # Random row, col, num
+
+    countdown_thread = threading.Thread(target=countdown)
+    input_thread = threading.Thread(target=get_input)
+
+    countdown_thread.start()
+    input_thread.start()
+
+    input_thread.join(timeout)
+    timer_running[0] = False
+
+    countdown_thread.join()
+
+    return move[0]
+
+def sudoku_game():
+    initial_board = [
+        [5, 3, 0, 0, 7, 0, 0, 0, 0],
+        [6, 0, 0, 1, 9, 5, 0, 0, 0],
+        [0, 9, 8, 0, 0, 0, 0, 6, 0],
+        [8, 0, 0, 0, 6, 0, 0, 0, 3],
+        [4, 0, 0, 8, 0, 3, 0, 0, 1],
+        [7, 0, 0, 0, 2, 0, 0, 0, 6],
+        [0, 6, 0, 0, 0, 0, 2, 8, 0],
+        [0, 0, 0, 4, 1, 9, 0, 0, 5],
+        [0, 0, 0, 0, 8, 0, 0, 7, 9]
+    ]
+
+    board = [row[:] for row in initial_board]
+    circuit = QuantumCircuit(81, 81)  # Adjusted to support the full board
+    scoreboard = {}
+
+    player_1 = input("Enter Player 1's name: ")
+    player_2 = input("Enter Player 2's name: ")
+
+    scoreboard[player_1] = 0
+    scoreboard[player_2] = 0
+
+    turn = 0
+    while any(0 in row for row in board):
+        current_player = player_1 if turn % 2 == 0 else player_2
+        print(f"{current_player}'s turn")
+        print_sudoku(board)
+
+        while True:
+            move = timer_input(10)  # Timeout in seconds
+            if move is None:
+                print(f"Time's up! {current_player} loses a turn.")
+                break
+
+            row, col, num = move
+            if 0 <= row < 9 and 0 <= col < 9 and 1 <= num <= 9 and board[row][col] == 0:
+                if is_valid_move(board, row, col, num):
+                    board[row][col] = num
+                    circuit.x(row * 9 + col)  # Represent move in quantum circuit
+                    break
+                else:
+                    print("Invalid move: violates Sudoku rules.")
+            else:
+                print("Invalid input: out of range or tile already filled.")
+
+        turn += 1
+
+    print("Game Over!")
+    print_sudoku(board)
+
+    # Save circuit diagram
+    circuit.measure(list(range(81)), list(range(81)))
+    filename = "sudoku_circuit.png"
+    circuit.draw(output='mpl')
+    plt.savefig(filename)
+    print(f"Circuit diagram saved as {filename}.")
+
+sudoku_game()

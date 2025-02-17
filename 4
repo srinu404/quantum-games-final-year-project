@@ -1,0 +1,77 @@
+from qiskit import QuantumCircuit, execute, BasicAer
+from qiskit.visualization import plot_histogram
+
+def print_board(board):
+    print('-----')
+    print(f'{board[6]}|{board[7]}|{board[8]}')
+    print('-----')
+    print(f'{board[3]}|{board[4]}|{board[5]}')
+    print('-----')
+    print(f'{board[0]}|{board[1]}|{board[2]}')
+    print('-----')
+
+def check_winner(board, mark):
+    return (
+        (board[0] == mark and board[1] == mark and board[2] == mark) or
+        (board[3] == mark and board[4] == mark and board[5] == mark) or
+        (board[6] == mark and board[7] == mark and board[8] == mark) or
+        (board[0] == mark and board[3] == mark and board[6] == mark) or
+        (board[1] == mark and board[4] == mark and board[7] == mark) or
+        (board[2] == mark and board[5] == mark and board[8] == mark) or
+        (board[0] == mark and board[4] == mark and board[8] == mark) or
+        (board[2] == mark and board[4] == mark and board[6] == mark)
+    )
+
+# Get player names
+player_1_name = input("Enter Player 1's name: ")
+player_2_name = input("Enter Player 2's name: ")
+
+# Initialize board and quantum circuit
+board = [' ' for _ in range(9)]
+circuit = QuantumCircuit(9, 9)
+entangled_pairs = [(1, 6), (7, 8), (4, 5)]
+
+# Initialize entangled states
+for pair in entangled_pairs:
+    circuit.h(pair[0])  # Hadamard gate
+    circuit.x(pair[1])  # X gate
+    circuit.cx(pair[0], pair[1])  # Controlled-X gate
+
+# Game loop
+winner = None
+for turn in range(9):
+    current_player_name = player_1_name if turn % 2 == 0 else player_2_name
+    mark = 'X' if turn % 2 == 0 else 'O'
+
+    # Player move
+    while True:
+        try:
+            move = int(input(f"{current_player_name}, enter your move (0-8): "))
+            if 0 <= move < 9 and board[move] == ' ':
+                board[move] = mark
+                circuit.x(move)  # Apply X gate to represent the move
+                break
+            else:
+                print("Invalid move. Tile already occupied or out of range.")
+        except ValueError:
+            print("Please enter a valid number between 0 and 8.")
+
+    # Print updated board
+    print(f"{current_player_name}'s move:")
+    print_board(board)
+
+    # Check for a winner
+    if check_winner(board, mark):
+        winner = current_player_name
+        print(f"Congratulations {winner}! You win!")
+        break
+
+# Check for a draw if no winner
+if not winner:
+    print("It's a draw! No one wins.")
+
+# Final quantum circuit
+circuit.measure(list(range(9)), list(range(9)))
+print("Final Quantum Circuit:")
+circuit.draw(output='mpl')
+

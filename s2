@@ -1,0 +1,138 @@
+from qiskit import QuantumCircuit, execute, Aer
+import numpy as np
+import threading
+import time
+
+def print_board(board):
+    print("\nCurrent Sudoku Board:")
+    print("+-------+-------+-------+")
+    for i in range(9):
+        row = " | ".join(
+            " ".join(str(x) if x != 0 else "." for x in board[i][j:j+3]) for j in range(0, 9, 3)
+        )
+        print(f"| {row} |")
+        if i % 3 == 2:
+            print("+-------+-------+-------+")
+
+def is_valid_move(board, row, col, num):
+    for x in range(9):
+        if board[row][x] == num or board[x][col] == num:
+            return False
+
+    start_row, start_col = 3 * (row // 3), 3 * (col // 3)
+    for i in range(3):
+        for j in range(3):
+            if board[start_row + i][start_col + j] == num:
+                return False
+    return True
+
+def get_move(timeout):
+    move = [None]
+    timer_running = [True]
+
+    def countdown():
+        for i in range(timeout, 0, -1):
+            if not timer_running[0]:
+                break
+            print(f"Time left: {i} seconds", end="\r")
+            time.sleep(1)
+        if timer_running[0]:
+            print("\nTime's up! No move made.")
+
+    def input_move():
+        try:
+            row = int(input("Enter the row number (1-9): ")) - 1
+            col = int(input("Enter the column number (1-9): ")) - 1
+            num = int(input("Enter the number to place (1-9): "))
+            move[0] = (row, col, num)
+        except ValueError:
+            print("Invalid input.")
+
+    countdown_thread = threading.Thread(target=countdown)
+    input_thread = threading.Thread(target=input_move)
+
+    countdown_thread.start()
+    input_thread.start()
+
+    input_thread.join(timeout)
+    timer_running[0] = False
+    countdown_thread.join()
+
+    return move[0]
+
+player_1_name = input("Enter Player 1's name: ")
+player_2_name = input("Enter Player 2's name: ")
+
+scoreboard = {player_1_name: 0, player_2_name: 0}
+undo_limits = {player_1_name: 3, player_2_name: 3}
+
+while True:
+    board = np.zeros((9, 9), dtype=int)
+    circuit = QuantumCircuit(81, 81)
+
+    for i in range(9):
+        for j in range(9):
+            if np.random.rand() < 0.3:  # Randomly prefill some cells
+                num = np.random.randint(1, 10)
+                if is_valid_move(board, i, j, num):
+                    board[i][j] = num
+
+    print_board(board)
+
+    winner = None
+    turn = 0
+
+    while turn < 81:
+        current_player_name = player_1_name if turn % 2 == 0 else player_2_name
+
+        while True:
+            print(f"{current_player_name}'s turn. Undo remaining: {undo_limits[current_player_name]}.")
+            move = get_move(25)
+            if move is None:
+                print("No move made in time. Turn skipped.")
+                break
+
+            row, col, num = move
+            if board[row][col] == 0 and is_valid_move(board, row, col, num):
+                board[row][col] = num
+                circuit.x(row * 9 + col)  # Represent move in quantum circuit
+                break
+            else:
+                print("Invalid move. Try again.")
+
+        print_board(board)
+
+        if undo_limits[current_player_name] > 0:
+            undo_choice = input("Do you want to undo your move? (yes/no): ").strip().lower()
+            if undo_choice == 'yes':
+                board[row][col] = 0  # Undo the move
+                undo_limits[current_player_name] -= 1
+                print("Move undone.")
+                continue
+
+        if np.all(board):
+            winner = current_player_name
+            print(f"Congratulations {winner}! You completed the Sudoku.")
+            scoreboard[winner] += 5
+            break
+
+        turn += 1
+
+    if not winner:
+        print("No winner this time!")
+
+    filename = f"sudoku_circuit_{winner.replace(' ', '_') if winner else 'no_winner'}.png"
+    circuit.measure(range(81), range(81))
+    circuit.draw(output='mpl').savefig(filename)
+    print(f"Circuit diagram saved as {filename}.")
+
+    print("\nCurrent Scoreboard:")
+    for player, score in scoreboard.items():
+        print(f"{player}: {score}")
+
+    choice = input("Do you want to play another game? (yes/no): ").strip().lower()
+    if choice != 'yes':
+        print("Thank you for playing! Final Scores:")
+        for player, score in scoreboard.items():
+            print(f"{player}: {score}")
+        break

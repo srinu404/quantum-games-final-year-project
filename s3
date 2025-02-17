@@ -1,0 +1,127 @@
+from qiskit import QuantumCircuit, execute, Aer
+import numpy as np
+import time
+
+def print_board(board):
+    print("\nCurrent Sudoku Board:")
+    print("+-----+-----+")
+    for i in range(4):
+        row = " | ".join(" ".join(str(x) if x != 0 else "." for x in board[i][j:j+2]) for j in range(0, 4, 2))
+        print(f"| {row} |")
+        if (i + 1) % 2 == 0:
+            print("+-----+-----+")
+
+def is_valid_move(board, row, col, num):
+    if num in board[row]:
+        return False
+    if num in [board[x][col] for x in range(4)]:
+        return False
+    start_row, start_col = 2 * (row // 2), 2 * (col // 2)
+    for i in range(2):
+        for j in range(2):
+            if board[start_row + i][start_col + j] == num:
+                return False
+    return True
+
+def get_move():
+    while True:
+        try:
+            row = int(input("Enter the row number (1-4): ")) - 1
+            col = int(input("Enter the column number (1-4): ")) - 1
+            num = int(input("Enter the number to place (1-4): "))
+            if 0 <= row < 4 and 0 <= col < 4 and 1 <= num <= 4:
+                return row, col, num
+            else:
+                print("Invalid input. Please enter values in the correct range.")
+        except ValueError:
+            print("Invalid input. Please enter numerical values.")
+
+player_name = input("Enter your name: ")
+scoreboard = {player_name: 0}
+undo_limit = 3
+final_circuit = QuantumCircuit(16, 16)
+
+while True:
+    board = np.zeros((4, 4), dtype=int)
+    circuit = QuantumCircuit(16, 16)
+
+    for i in range(4):
+        for j in range(4):
+            if np.random.rand() < 0.25:  # Randomly prefill some cells
+                num = np.random.randint(1, 5)
+                if is_valid_move(board, i, j, num):
+                    board[i][j] = num
+
+    print_board(board)
+
+    winner = None
+    turn = 0
+    start_time = time.time()
+
+    while turn < 16:
+        print(f"{player_name}'s turn. Undo remaining: {undo_limit}.")
+
+        while True:
+            row, col, num = get_move()
+            if board[row][col] == 0 and is_valid_move(board, row, col, num):
+                board[row][col] = num
+                circuit.x(row * 4 + col)  # Represent move in quantum circuit
+                break
+            else:
+                print("Invalid move. Try again.")
+
+        print_board(board)
+
+        if undo_limit > 0:
+            undo_choice = input("Do you want to undo your move? (yes/no): ").strip().lower()
+            if undo_choice == 'yes':
+                board[row][col] = 0  # Undo the move
+                undo_limit -= 1
+                print("Move undone.")
+                continue
+
+        # Check if a box is completed
+        for box_row in range(0, 4, 2):
+            for box_col in range(0, 4, 2):
+                box = [board[box_row + i][box_col + j] for i in range(2) for j in range(2)]
+                if sorted(box) == list(range(1, 5)):
+                    print("Congratulations! One box is completed!")
+                    filename = f"sudoku_circuit_box_{box_row}_{box_col}.png"
+                    circuit.measure(range(16), range(16))
+                    circuit.draw(output='mpl').savefig(filename)
+                    print(f"Circuit diagram saved as {filename}.")
+                    scoreboard[player_name] += 1
+
+        if np.all(board):
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f"Congratulations {player_name}! You completed the Sudoku in {elapsed_time:.2f} seconds.")
+            scoreboard[player_name] += 1
+            winner = player_name
+            break
+
+        turn += 1
+
+    if not winner:
+        print("No winner this time!")
+
+    # Add current circuit to final circuit
+    final_circuit.compose(circuit, inplace=True)
+
+    print("\nCurrent Scoreboard:")
+    for player, score in scoreboard.items():
+        print(f"{player}: {score}")
+
+    choice = input("Do you want to play another game? (yes/no): ").strip().lower()
+    if choice != 'yes':
+        # Save final combined circuit diagram
+        final_filename = "final_image.png"
+        final_circuit.measure(range(16), range(16))
+        final_circuit.draw(output='mpl').savefig(final_filename)
+        print(f"Final combined circuit diagram saved as {final_filename}.")
+
+        print("Thank you for playing! Final Scores:")
+        for player, score in scoreboard.items():
+            print(f"{player}: {score}")
+        break
+

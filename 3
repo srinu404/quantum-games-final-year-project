@@ -1,0 +1,82 @@
+from qiskit import QuantumCircuit, execute, BasicAer
+from qiskit.visualization import plot_histogram
+
+# Initialize player positions and entangled cells
+l_player_1 = []  # Player 1 tiles
+l_player_2 = []  # Player 2 tiles
+l_entangled = [(1, 6), (7, 8), (4, 5)]  # Pairs of entangled tiles
+
+# Quantum circuit setup
+circuit = QuantumCircuit(9, 9)
+circuit.name = "Tic-Tac-Toe Quantum"
+
+def print_board(board):
+    print('-----')
+    print(f'{board[6]}|{board[7]}|{board[8]}')
+    print('-----')
+    print(f'{board[3]}|{board[4]}|{board[5]}')
+    print('-----')
+    print(f'{board[0]}|{board[1]}|{board[2]}')
+    print('-----')
+
+def check_winner(board, mark):
+    return (
+        (board[0] == mark and board[1] == mark and board[2] == mark) or  # Row 1
+        (board[3] == mark and board[4] == mark and board[5] == mark) or  # Row 2
+        (board[6] == mark and board[7] == mark and board[8] == mark) or  # Row 3
+        (board[0] == mark and board[3] == mark and board[6] == mark) or  # Column 1
+        (board[1] == mark and board[4] == mark and board[7] == mark) or  # Column 2
+        (board[2] == mark and board[5] == mark and board[8] == mark) or  # Column 3
+        (board[0] == mark and board[4] == mark and board[8] == mark) or  # Diagonal 1
+        (board[2] == mark and board[4] == mark and board[6] == mark)     # Diagonal 2
+    )
+
+# Game loop
+board = [' ' for _ in range(9)]  # Initial empty board
+
+# Initialize entangled states
+for entangled_pair in l_entangled:
+    circuit.h(entangled_pair[0])  # Hadamard gate
+    circuit.x(entangled_pair[1])  # X gate
+    circuit.cx(entangled_pair[0], entangled_pair[1])  # Controlled-X gate
+
+winner = None
+
+for turn in range(9):  # Maximum of 9 turns in Tic-Tac-Toe
+    # Determine the current player
+    current_player = 1 if turn % 2 == 0 else 2
+    mark = 'X' if current_player == 1 else 'O'
+
+    # Player's turn
+    while True:
+        move = int(input(f"Player {current_player}, enter your move (0-8): "))
+        if 0 <= move < 9 and board[move] == ' ':
+            board[move] = mark
+            if current_player == 1:
+                l_player_1.append(move)
+            else:
+                l_player_2.append(move)
+            circuit.x(move)  # Apply X gate to the move
+            break
+        else:
+            print("Invalid move. Tile already occupied or out of range.")
+
+    # Print the updated board
+    print(f"Player {current_player}'s move:")
+    print_board(board)
+
+    # Check for a winner
+    if check_winner(board, mark):
+        winner = current_player
+        print(f"Player {current_player} wins!")
+        break
+
+# End of game
+if not winner:
+    print("No player wins. The game ends in a draw.")
+
+# Final measurement and circuit diagram
+circuit.measure(list(range(9)), list(range(9)))
+print("Final Quantum Circuit:")
+circuit.draw(output='mpl', filename='circuit.png')
+
